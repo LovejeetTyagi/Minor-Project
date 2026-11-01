@@ -48,3 +48,8 @@ Use the same scikit-learn version for training and serving, otherwise loading th
 Age, sex, chest pain type (cp), resting BP (trestbps), cholesterol (chol), fasting blood sugar (fbs),
 resting ECG (restecg), max heart rate (thalach), exercise angina (exang), ST depression (oldpeak),
 ST slope (slope), vessels coloured (ca), thalassemia (thal).
+
+## Deployed Link
+https://minor-project-lzld.onrender.com/
+
+
