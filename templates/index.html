@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <h1>Heart Disease Prediction System</h1>
+  <p>Enter 13 simple clinical details and a machine learning model trained on the
+     UCI Heart Disease dataset will estimate the likelihood of heart disease.</p>
+  <a class="btn" href="{{ url_for('predict_page') }}">Start Prediction</a>
+</section>
+
+<section class="cards">
+  <div class="card"><h3>13 inputs</h3><p>Age, blood pressure, cholesterol, ECG results and more.</p></div>
+  <div class="card"><h3>ML powered</h3><p>Model chosen after comparing Logistic Regression, SVM, KNN and Random Forest.</p></div>
+  <div class="card"><h3>Instant result</h3><p>Get a probability score and a Low / Moderate / High risk label.</p></div>
+</section>
+<p class="note">This tool is for learning only and cannot replace a doctor.</p>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Predict | Heart Disease Prediction{% endblock %}
+{% block content %}
+<h1>Patient Details</h1>
+<p class="muted">All fields are required.</p>
+
+{% if errors %}
+<div class="alert">Please fix the highlighted fields and try again.</div>
+{% endif %}
+
+<form method="post" action="{{ url_for('predict_page') }}" class="form-grid" id="predict-form" novalidate>
+  {% for f in fields %}
+  <div class="field {% if errors.get(f.name) %}has-error{% endif %}">
+    <label for="{{ f.name }}">{{ f.label }}{% if f.unit %} <span class="unit">({{ f.unit }})</span>{% endif %}</label>
+    {% if f.type == "select" %}
+      <select id="{{ f.name }}" name="{{ f.name }}" required>
+        <option value="" disabled {% if form.get(f.name) in (none, '') %}selected{% endif %}>Select...</option>
+        {% for value, text in f.options %}
+        <option value="{{ value }}" {% if form.get(f.name) is not none and form.get(f.name)|string == value|string %}selected{% endif %}>{{ text }}</option>
+        {% endfor %}
+      </select>
+    {% else %}
+      <input id="{{ f.name }}" name="{{ f.name }}" type="number" required
+             min="{{ f.min }}" max="{{ f.max }}" step="{{ f.step }}"
+             placeholder="{{ f.placeholder }}" value="{{ form.get(f.name, '') }}">
+    {% endif %}
+    {% if errors.get(f.name) %}<small class="error">{{ errors[f.name] }}</small>{% endif %}
+  </div>
+  {% endfor %}
+  <div class="actions">
+    <button type="submit" class="btn" id="submit-btn">Predict</button>
+    <button type="reset" class="btn btn-light">Reset</button>
+  </div>
+</form>
+{% endblock %}

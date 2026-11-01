@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}About | Heart Disease Prediction{% endblock %}
+{% block content %}
+<h1>About the Project</h1>
+<p>This is a B.Tech CSE semester minor project. It predicts the likelihood of heart disease
+   from 13 clinical features using a supervised machine learning model.</p>
+
+<h2>How it works</h2>
+<ul>
+  <li>Dataset: UCI Heart Disease dataset (Kaggle version).</li>
+  <li>Preprocessing: duplicate removal and feature scaling (StandardScaler).</li>
+  <li>Models compared: Logistic Regression, SVM, KNN, Random Forest (5-fold cross-validation).</li>
+  <li>Model in use now: <strong>{{ model_name }}</strong>.</li>
+  <li>Web app: Flask, with a JSON API at <code>/api/predict</code>.</li>
+</ul>
+
+<h2>Input features</h2>
+<p>age, sex, cp, trestbps, chol, fbs, restecg, thalach, exang, oldpeak, slope, ca, thal.</p>
+
+<p class="note">Disclaimer: This project is for learning only. It is not a medical device
+   and must not be used for diagnosis or treatment decisions.</p>
+{% endblock %}
