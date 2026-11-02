@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}History | Heart Disease Prediction{% endblock %}
+{% block content %}
+<h1>Prediction History</h1>
+<p class="muted">Every prediction made on this site is stored here (inputs and result only, no names).</p>
+
+{% if not stats or stats.total == 0 %}
+<div class="note">No predictions yet. <a href="{{ url_for('predict_page') }}">Make one</a> and it will appear here.</div>
+{% else %}
+<section class="cards stats">
+  <div class="card"><h3>{{ stats.total }}</h3><p>Total predictions</p></div>
+  <div class="card"><h3>{{ stats.average_percent }}%</h3><p>Average risk score</p></div>
+  <div class="card"><h3>{{ stats.counts.High }}</h3><p>High risk results</p></div>
+</section>
+
+<div class="grid2">
+  <div><h2>Risk levels</h2><div class="chart-box small"><canvas id="riskChart"></canvas></div></div>
+  <div><h2>Recent risk scores</h2><div class="chart-box small"><canvas id="trendChart"></canvas></div></div>
+</div>
+
+<h2>Latest predictions</h2>
+<ul class="history">
+  {% for row in rows %}
+  <li>
+    <span class="risk-badge small risk-{{ row.risk|lower }}-bg">{{ row.risk }}</span>
+    <strong>{{ row.percent }}%</strong>
+    <span>{{ row.summary }}</span>
+    <span class="muted">{{ row.created_at }} UTC &middot; {{ row.source }}</span>
+  </li>
+  {% endfor %}
+</ul>
+
+<form method="post" action="{{ url_for('history_clear') }}"
+      onsubmit="return confirm('Delete all saved predictions?');">
+  <button type="submit" class="btn btn-light">Clear history</button>
+</form>
+<script id="chart-data" type="application/json">{{ {"page": "history", "stats": stats}|tojson }}</script>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if stats and stats.total %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+{% endif %}
+{% endblock %}

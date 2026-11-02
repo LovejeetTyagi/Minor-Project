@@ -2,6 +2,7 @@
 
 Educational project only. Not a medical diagnostic tool.
 """
+import json
 import logging
 import math
 import os
@@ -9,7 +10,12 @@ from pathlib import Path
 
 import joblib
 import pandas as pd
-from flask import Flask, jsonify, render_template, request
+from flask import (Flask, jsonify, redirect, render_template, request,
+                   send_file, url_for)
+
+import database
+from insights import explain_prediction, health_tips
+from report import build_pdf
 
 # ---------------------------------------------------------------------------
 # 1. Configuration
@@ -40,7 +46,29 @@ def load_artifacts():
 
 
 model, scaler = load_artifacts()
+CLASS_INDEX = list(model.classes_).index(1)
 app.logger.info("Model (%s) and scaler loaded.", type(model).__name__)
+
+
+def load_json(path):
+    """Optional files written by the notebook. Returns None if missing/invalid."""
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return json.load(handle)
+    except (OSError, ValueError):
+        return None
+
+
+METRICS = load_json(BASE_DIR / "models" / "metrics.json")      # for the Models page
+REFERENCE = load_json(BASE_DIR / "models" / "reference.json")  # typical values for explanations
+if METRICS is None or REFERENCE is None:
+    app.logger.warning("metrics.json / reference.json not found - re-run the notebook "
+                       "to enable the Models page and 'Why this result?'.")
+
+try:
+    database.init_db()
+except Exception:  # history is optional; never stop the app because of it
+    app.logger.exception("Could not initialise the history database")
 
 # ---------------------------------------------------------------------------
 # 3. Feature definitions (single source of truth for the form AND validation)
@@ -137,8 +165,7 @@ def run_prediction(values):
     frame = pd.DataFrame([values], columns=FEATURES)
     scaled = scaler.transform(frame)
     prediction = int(model.predict(scaled)[0])
-    class_index = list(model.classes_).index(1)
-    probability = float(model.predict_proba(scaled)[0][class_index])
+    probability = float(model.predict_proba(scaled)[0][CLASS_INDEX])
     return {
         "prediction": prediction,
         "label": ("Heart disease likely (model output)" if prediction == 1
@@ -147,6 +174,44 @@ def run_prediction(values):
         "percent": round(probability * 100, 1),
         "risk": risk_level(probability),
     }
+
+
+def proba_fn(frame):
+    """Probability of heart disease for every row of a DataFrame."""
+    return model.predict_proba(scaler.transform(frame))[:, CLASS_INDEX]
+
+
+FIELD_BY_NAME = {f["name"]: f for f in FIELDS}
+
+
+def display_value(field, value):
+    if field["type"] == "select":
+        return dict(field["options"])[value]
+    return f"{value:g} {field['unit']}".strip()
+
+
+def summarise(values):
+    return [(f["label"], display_value(f, values[f["name"]])) for f in FIELDS]
+
+
+def analyse(values):
+    """Prediction + 'why' factors + health tips for one validated input."""
+    result = run_prediction(values)
+    factors = []
+    if REFERENCE:
+        for item in explain_prediction(values, REFERENCE, FEATURES, proba_fn):
+            field = FIELD_BY_NAME[item["name"]]
+            factors.append({"name": item["name"], "label": field["label"],
+                            "value": display_value(field, values[item["name"]]),
+                            "effect": round(item["effect"], 1)})
+    return result, factors, health_tips(values, result["risk"])
+
+
+def save_history(source, values, result):
+    try:
+        database.save_prediction(source, values, result)
+    except Exception:
+        app.logger.exception("Could not save prediction history")
 
 
 # ---------------------------------------------------------------------------
@@ -174,18 +239,63 @@ def predict_page():
                                errors=errors), 400
 
     try:
-        result = run_prediction(values)
+        result, factors, tips = analyse(values)
     except Exception:
         app.logger.exception("Prediction failed")
         return render_template("error.html", code=500,
                                message="Prediction failed. Please try again."), 500
 
-    summary = [(f["label"], dict(f["options"])[values[f["name"]]]
-                if f["type"] == "select"
-                else f"{values[f['name']]:g} {f['unit']}".strip())
-               for f in FIELDS]
-    return render_template("result.html", result=result, summary=summary,
-                           disclaimer=DISCLAIMER)
+    save_history("web", values, result)
+    factor_max = max((abs(f["effect"]) for f in factors), default=1) or 1
+    return render_template("result.html", result=result, values=values,
+                           summary=summarise(values), factors=factors,
+                           factor_max=factor_max, tips=tips, disclaimer=DISCLAIMER)
+
+
+@app.route("/report", methods=["POST"])
+def report():
+    values, errors = validate_input(request.form.to_dict())
+    if errors:
+        return render_template("error.html", code=400,
+                               message="Invalid data for the report."), 400
+    try:
+        result, factors, tips = analyse(values)
+        pdf = build_pdf(result, summarise(values), factors, tips, DISCLAIMER)
+    except Exception:
+        app.logger.exception("Report generation failed")
+        return render_template("error.html", code=500,
+                               message="Could not create the PDF report."), 500
+    return send_file(pdf, mimetype="application/pdf", as_attachment=True,
+                     download_name="heart-risk-report.pdf")
+
+
+@app.route("/models")
+def models_page():
+    return render_template("models.html", metrics=METRICS)
+
+
+@app.route("/history")
+def history_page():
+    try:
+        rows = database.get_history()
+        stats = database.get_stats()
+    except Exception:
+        app.logger.exception("Could not read history")
+        rows, stats = [], None
+    for row in rows:
+        inputs = row["inputs"]
+        row["summary"] = (f"Age {inputs.get('age'):g}, "
+                          f"{'Male' if inputs.get('sex') == 1 else 'Female'}")
+    return render_template("history.html", rows=rows, stats=stats)
+
+
+@app.route("/history/clear", methods=["POST"])
+def history_clear():
+    try:
+        database.clear_history()
+    except Exception:
+        app.logger.exception("Could not clear history")
+    return redirect(url_for("history_page"))
 
 
 # ---------------------------------------------------------------------------
@@ -213,17 +323,19 @@ def api_predict():
         return jsonify({"success": False, "errors": errors}), 400
 
     try:
-        result = run_prediction(values)
+        result, factors, _tips = analyse(values)
     except Exception:
         app.logger.exception("Prediction failed")
         return jsonify({"success": False, "error": "Prediction failed."}), 500
 
+    save_history("api", values, result)
     return jsonify({
         "success": True,
         "prediction": result["prediction"],
         "prediction_label": result["label"],
         "model_probability_score": result["probability"],
         "risk_level": result["risk"],
+        "top_factors": [{"feature": f["name"], "effect_points": f["effect"]} for f in factors],
         "disclaimer": DISCLAIMER,
     })
 

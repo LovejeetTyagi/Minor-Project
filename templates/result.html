@@ -12,12 +12,48 @@
 
 <p class="note">{{ disclaimer }}</p>
 
+<form method="post" action="{{ url_for('report') }}" class="inline-form">
+  {% for name, value in values.items() %}
+  <input type="hidden" name="{{ name }}" value="{{ value }}">
+  {% endfor %}
+  <button type="submit" class="btn">Download PDF report</button>
+  <a class="btn btn-light" href="{{ url_for('predict_page') }}">New prediction</a>
+  <a class="btn btn-light" href="{{ url_for('history_page') }}">View history</a>
+</form>
+
+{% if factors %}
+<h2>Why this result?</h2>
+<p class="muted">Each bar shows how much that value changed the risk score compared with a typical patient
+  (approximate, based on what-if testing of the model).</p>
+<ul class="factors">
+  {% for f in factors %}
+  <li>
+    <div class="factor-head">
+      <span>{{ f.label }}: <strong>{{ f.value }}</strong></span>
+      <span class="{{ 'up' if f.effect > 0 else 'down' }}">{{ '+' if f.effect > 0 else '' }}{{ f.effect }} pts</span>
+    </div>
+    <div class="factor-bar"><div class="{{ 'fill-up' if f.effect > 0 else 'fill-down' }}"
+         style="width: {{ (f.effect|abs / factor_max * 100)|round(0) }}%"></div></div>
+  </li>
+  {% endfor %}
+</ul>
+<p class="legend"><span class="dot up-dot"></span> raises risk &nbsp; <span class="dot down-dot"></span> lowers risk</p>
+{% endif %}
+
+<h2>Health tips for you</h2>
+<ul class="tips">
+  {% for tip in tips.personal %}<li>{{ tip }}</li>{% endfor %}
+</ul>
+<h3>General heart-healthy habits</h3>
+<ul class="tips">
+  {% for tip in tips.general %}<li>{{ tip }}</li>{% endfor %}
+</ul>
+<div class="alert">{{ tips.emergency }}</div>
+
 <h2>Details you entered</h2>
 <ul class="summary">
   {% for label, value in summary %}
   <li><span>{{ label }}</span><strong>{{ value }}</strong></li>
   {% endfor %}
 </ul>
-
-<a class="btn" href="{{ url_for('predict_page') }}">New Prediction</a>
 {% endblock %}

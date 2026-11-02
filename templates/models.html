@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Model Comparison | Heart Disease Prediction{% endblock %}
+{% block content %}
+<h1>Model Comparison</h1>
+
+{% if not metrics %}
+<div class="note">Model results are not available yet. Run all cells of
+  <code>notebooks/model_training.ipynb</code> to create <code>models/metrics.json</code>,
+  then restart the app.</div>
+{% else %}
+{% set best = (metrics.models | selectattr('name', 'equalto', metrics.selected) | list | first) %}
+<p class="muted">Four models were tuned with 5-fold cross-validation on {{ metrics.n_train }} training
+  patients and then tested on {{ metrics.n_test }} unseen patients. Selected model:
+  <strong>{{ metrics.selected }}</strong>.</p>
+
+<section class="cards stats">
+  <div class="card"><h3>{{ (best.accuracy * 100)|round(1) }}%</h3><p>Test accuracy</p></div>
+  <div class="card"><h3>{{ (best.recall * 100)|round(1) }}%</h3><p>Recall (disease cases found)</p></div>
+  <div class="card"><h3>{{ (best.precision * 100)|round(1) }}%</h3><p>Precision</p></div>
+  <div class="card"><h3>{{ best.roc_auc|round(3) }}</h3><p>ROC-AUC</p></div>
+</section>
+
+<h2>Test-set scores</h2>
+<div class="chart-box"><canvas id="metricsChart"></canvas></div>
+
+<h2>ROC curves</h2>
+<p class="muted">The closer a curve is to the top-left corner, the better the model.</p>
+<div class="chart-box"><canvas id="rocChart"></canvas></div>
+
+<h2>Confusion matrix ({{ metrics.selected }})</h2>
+{% set cm = metrics.confusion_matrix %}
+<div class="cm">
+  <div class="cm-head"></div><div class="cm-head">Predicted healthy</div><div class="cm-head">Predicted disease</div>
+  <div class="cm-head">Actually healthy</div><div class="cm-cell good">{{ cm[0][0] }}</div><div class="cm-cell bad">{{ cm[0][1] }}</div>
+  <div class="cm-head">Actually disease</div><div class="cm-cell bad">{{ cm[1][0] }}</div><div class="cm-cell good">{{ cm[1][1] }}</div>
+</div>
+
+<h2>All models</h2>
+<div class="cards">
+  {% for m in metrics.models %}
+  <div class="card {% if m.name == metrics.selected %}selected{% endif %}">
+    <h3>{{ m.name }}{% if m.name == metrics.selected %} <span class="tag">selected</span>{% endif %}</h3>
+    <ul class="plain">
+      <li>Cross-validation ROC-AUC: <strong>{{ m.cv_roc_auc }}</strong></li>
+      <li>Test accuracy: <strong>{{ (m.accuracy * 100)|round(1) }}%</strong></li>
+      <li>Precision: {{ (m.precision * 100)|round(1) }}% &middot; Recall: {{ (m.recall * 100)|round(1) }}%</li>
+      <li>F1: {{ (m.f1 * 100)|round(1) }}% &middot; ROC-AUC: {{ m.roc_auc|round(3) }}</li>
+    </ul>
+  </div>
+  {% endfor %}
+</div>
+<script id="chart-data" type="application/json">{{ {"page": "models", "metrics": metrics}|tojson }}</script>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if metrics %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+{% endif %}
+{% endblock %}
